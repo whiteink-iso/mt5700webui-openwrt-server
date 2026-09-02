@@ -1,15 +1,18 @@
 name: build
 
+
 on:
   push:
-    branches: [main, feat/go-backend]
+    branches: [main, feat/go-backend, fix/serial-idle-read]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
 
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 
 jobs:
   frontend:
@@ -34,7 +37,6 @@ jobs:
           npm run sync:www
           after=$(find ../at-webserver/files/www/5700 -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum)
           test "$before" = "$after"
-
   backend:
     name: Go 后端 vet 与单测
     runs-on: ubuntu-latest
@@ -49,6 +51,7 @@ jobs:
           cache-dependency-path: at-webserver/src/go.sum
       - run: go vet ./...
       - run: go test -race ./...
+
 
   package:
     name: ${{ matrix.arch }} · ${{ matrix.release == 'SNAPSHOT' && 'apk' || 'ipk' }}
@@ -69,6 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+
       - name: SDK 构建软件包
         uses: openwrt/gh-action-sdk@v11
         env:
@@ -77,6 +81,7 @@ jobs:
           PACKAGES: at-webserver luci-app-at-webserver
           NO_REFRESH_CHECK: true
           V: s
+
 
       - name: 收集产物
         run: |
@@ -97,12 +102,12 @@ jobs:
             esac
           done
           ls -l out
-
       - uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.arch }}-${{ matrix.release }}
           path: out/*
           if-no-files-found: error
+
 
   release:
     name: 发布 Release
@@ -118,27 +123,3 @@ jobs:
           path: dist
           merge-multiple: true
       - run: ls -l dist
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          generate_release_notes: true
-          body: |
-            ## 安装说明
-
-            两个包都要装：`at-webserver`（后端+WebUI）和 `luci-app-at-webserver`（LuCI 集成，架构无关）。
-
-            **OpenWrt 24.10 及更早（opkg）**，按设备架构下载 `.ipk`：
-
-            ```sh
-            opkg install ./at-webserver_*_<架构>.ipk ./luci-app-at-webserver_*_all.ipk
-            ```
-
-            **OpenWrt 主干 SNAPSHOT（apk）**，下载 `.apk`：
-
-            ```sh
-            apk add --allow-untrusted ./at-webserver-*_<架构>.apk ./luci-app-at-webserver-*.apk
-            ```
-
-            常见架构对照：MT7621 → `mipsel_24kc`；MT7981/MT7986/IPQ807x → `aarch64_cortex-a53`；IPQ40xx → `arm_cortex-a7_neon-vfpv4`；ath79 → `mips_24kc`；x86 软路由 → `x86_64`；其他 ARM64 → `aarch64_generic`。
-
-            安装后访问 `http://路由器IP/5700/`。
